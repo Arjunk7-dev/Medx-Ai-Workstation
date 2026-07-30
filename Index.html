@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedX-AI | Radiology Explainability Workstation</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Status Bar -->
+<div class="statusbar">
+  <div class="statusbar-group">
+    <span class="dot dot-live"></span>
+    <span id="engineTag">ENGINE: DenseNet-121 / Grad-CAM v2.1</span>
+  </div>
+  <div class="statusbar-group statusbar-center">
+    <span id="studyId">STUDY ID: MX-00000</span>
+    <span class="statusbar-sep">·</span>
+    <span id="studyTime">--:--:--</span>
+    <span class="statusbar-sep">·</span>
+    <span id="shortcutHint">PRESS <kbd>?</kbd> FOR SHORTCUTS</span>
+  </div>
+  <div class="statusbar-group">
+    <span class="badge-mini">RESEARCH PROTOTYPE — NOT FOR CLINICAL USE</span>
+  </div>
+</div>
+
+<!-- App Header -->
+<header>
+  <div class="brand">
+    <div class="brand-mark">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <circle cx="13" cy="13" r="11" stroke="currentColor" stroke-width="1.6" opacity="0.35"/>
+        <path d="M13 4 L13 22 M4 13 L22 13" stroke="currentColor" stroke-width="1.6" opacity="0.55"/>
+        <circle cx="13" cy="13" r="4.5" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="brand-title">
+      <h1>MedX-AI <span>Workstation</span></h1>
+      <p>Explainable convolutional attention mapping for thoracic radiographs</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="metaToggle" title="Study metadata (DICOM tags)">
+      <i data-lucide="file-text"></i>
+    </button>
+    <button class="icon-btn" id="historyToggle" title="Analysis history">
+      <i data-lucide="history"></i>
+    </button>
+    <button class="icon-btn" id="shortcutsToggle" title="Keyboard shortcuts">
+      <i data-lucide="keyboard"></i>
+    </button>
+    <button class="icon-btn" id="exportBtn" title="Export report">
+      <i data-lucide="file-down"></i>
+    </button>
+  </div>
+</header>
+
+<!-- Main Workstation -->
+<main>
+
+  <!-- Column 1: Input & Controls -->
+  <section class="panel" id="panelInput">
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="scan-line"></i> Image Source</span>
+    </div>
+
+    <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Upload radiograph">
+      <i data-lucide="image-plus"></i>
+      <p>Drop a radiograph or <span>browse files</span></p>
+      <small>PNG · JPG · DICOM-exported</small>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label"><span>Model Architecture</span></div>
+      <div class="segmented" id="modelSeg">
+        <button class="seg-btn active" data-model="densenet">DenseNet-121</button>
+        <button class="seg-btn" data-model="resnet">ResNet-50</button>
+        <button class="seg-btn" data-model="efficientnet">EfficientNet-B4</button>
+      </div>
+    </div>
+
+    <div class="section-label">Sample Studies</div>
+    <div class="presets-grid" id="presetsGrid">
+      <button class="preset-btn" data-preset="pneumonia">
+        <span class="preset-dot dot-amber"></span>
+        <span class="preset-text"><strong>Pneumonia</strong><small>Right basal consolidation</small></span>
+      </button>
+      <button class="preset-btn" data-preset="cardiomegaly">
+        <span class="preset-dot dot-red"></span>
+        <span class="preset-text"><strong>Cardiomegaly</strong><small>Enlarged cardiac silhouette</small></span>
+      </button>
+      <button class="preset-btn" data-preset="nodule">
+        <span class="preset-dot dot-amber"></span>
+        <span class="preset-text"><strong>Pulmonary Nodule</strong><small>Focal upper-lobe lesion</small></span>
+      </button>
+      <button class="preset-btn" data-preset="normal">
+        <span class="preset-dot dot-green"></span>
+        <span class="preset-text"><strong>Normal Chest</strong><small>Unremarkable study</small></span>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="sliders-horizontal"></i> Grad-CAM Controls</span>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Heatmap Opacity</span>
+        <span class="mono-val" id="opacityVal">72%</span>
+      </div>
+      <input type="range" id="opacitySlider" min="0" max="100" value="72">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label"><span>Colormap</span></div>
+      <div class="segmented" id="colormapSeg">
+        <button class="seg-btn active" data-cmap="jet">Jet</button>
+        <button class="seg-btn" data-cmap="inferno">Inferno</button>
+        <button class="seg-btn" data-cmap="viridis">Viridis</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label"><span>Attention Depth</span></div>
+      <div class="segmented" id="layerSeg">
+        <button class="seg-btn" data-layer="shallow">Shallow</button>
+        <button class="seg-btn" data-layer="mid">Mid</button>
+        <button class="seg-btn active" data-layer="deep">Deep</button>
+      </div>
+    </div>
+
+    <div class="control-group control-row">
+      <label class="toggle">
+        <input type="checkbox" id="heatmapToggle" checked>
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>Show attention overlay</span>
+      </label>
+    </div>
+
+    <div class="control-group control-row">
+      <label class="toggle">
+        <input type="checkbox" id="compareToggle">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>Compare mode (drag slider)</span>
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="contrast"></i> Window / Level</span>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Brightness</span>
+        <span class="mono-val" id="brightnessVal">100%</span>
+      </div>
+      <input type="range" id="brightnessSlider" min="40" max="180" value="100">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Contrast</span>
+        <span class="mono-val" id="contrastVal">100%</span>
+      </div>
+      <input type="range" id="contrastSlider" min="40" max="220" value="100">
+    </div>
+
+    <button class="btn-secondary" id="wlResetBtn">
+      <i data-lucide="rotate-ccw"></i> Reset Window/Level
+    </button>
+
+    <button class="btn-primary" id="analyzeBtn">
+      <i data-lucide="cpu"></i>
+      Run Inference
+    </button>
+  </section>
+
+  <!-- Column 2: Viewer -->
+  <section class="panel panel-viewer">
+    <div class="viewer-toolbar">
+      <div class="viewer-tag" id="viewerMode">MODE · ORIGINAL SCAN</div>
+      <div class="viewer-tools">
+        <button class="icon-btn small tool-btn" id="measureTool" title="Measure tool (m)"><i data-lucide="ruler"></i></button>
+        <button class="icon-btn small tool-btn" id="annotateTool" title="Annotate tool (n)"><i data-lucide="map-pin"></i></button>
+        <button class="icon-btn small" id="clearAnnotations" title="Clear annotations"><i data-lucide="eraser"></i></button>
+        <span class="toolbar-sep"></span>
+        <button class="icon-btn small" id="zoomIn" title="Zoom in (+)"><i data-lucide="zoom-in"></i></button>
+        <button class="icon-btn small" id="zoomOut" title="Zoom out (-)"><i data-lucide="zoom-out"></i></button>
+        <button class="icon-btn small" id="zoomReset" title="Reset view (0)"><i data-lucide="maximize"></i></button>
+      </div>
+    </div>
+
+    <div class="viewer-container" id="viewerContainer">
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <p id="loaderText">Extracting activation gradients…</p>
+      </div>
+
+      <div class="scanline" id="scanline"></div>
+
+      <div class="canvas-stage" id="canvasStage">
+        <canvas id="imageCanvas"></canvas>
+        <canvas id="heatmapCanvas"></canvas>
+        <canvas id="annotateCanvas"></canvas>
+        <div class="compare-handle" id="compareHandle" hidden>
+          <div class="compare-line"></div>
+          <div class="compare-grip"><i data-lucide="move-horizontal"></i></div>
+        </div>
+      </div>
+
+      <div class="ctr-readout" id="ctrReadout" hidden></div>
+      <div class="crosshair-readout" id="crosshairReadout"></div>
+    </div>
+
+    <div class="viewer-footer">
+      <div class="viewer-meta">
+        <span>512 × 512</span>
+        <span class="statusbar-sep">·</span>
+        <span id="pixelReadout">x: — y: —</span>
+      </div>
+      <div class="viewer-meta mono-val" id="toolStatus">TOOL · NAVIGATE</div>
+      <div class="viewer-meta mono-val" id="fpsReadout">RENDER · IDLE</div>
+    </div>
+  </section>
+
+  <!-- Column 3: Diagnostics -->
+  <section class="panel" id="panelResults">
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="activity"></i> Diagnostic Prediction</span>
+    </div>
+
+    <div class="prediction-hero">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 120 120" class="gauge">
+          <circle cx="60" cy="60" r="52" class="gauge-track"/>
+          <circle cx="60" cy="60" r="52" class="gauge-fill" id="gaugeFill"/>
+        </svg>
+        <div class="gauge-center">
+          <span class="gauge-score" id="gaugeScore">--</span>
+          <span class="gauge-unit">%</span>
+        </div>
+      </div>
+      <div class="prediction-info">
+        <span class="finding-label" id="findingLabel">AWAITING INPUT</span>
+        <span class="finding-title" id="predClass">No study loaded</span>
+        <p class="finding-desc" id="secondaryFindings">Select a sample study or upload a radiograph to begin.</p>
+      </div>
+    </div>
+
+    <div class="section-label">Differential Findings</div>
+    <div class="differential-list" id="differentialList"></div>
+
+    <div class="divider"></div>
+
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="layers"></i> Ensemble Comparison</span>
+      <span class="consensus-badge" id="consensusBadge">CONSENSUS</span>
+    </div>
+    <div class="ensemble-table" id="ensembleTable"></div>
+
+    <div class="divider"></div>
+
+    <div class="panel-head">
+      <span class="panel-title"><i data-lucide="eye"></i> XAI Attention Summary</span>
+    </div>
+    <div class="explainability-box" id="xaiExplanation">
+      Grad-CAM projects gradients from the target class back onto the final convolutional feature maps, highlighting the spatial regions the network weighted most heavily.
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric-card">
+        <span>Target Layer</span>
+        <strong id="layerInfo">conv5_block3_out</strong>
+      </div>
+      <div class="metric-card">
+        <span>Peak Activation</span>
+        <strong id="peakVal">0.00</strong>
+      </div>
+      <div class="metric-card">
+        <span>ROI Coverage</span>
+        <strong id="roiArea">0%</strong>
+      </div>
+      <div class="metric-card">
+        <span>Inference Time</span>
+        <strong id="inferTime">— ms</strong>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- History Drawer -->
+<aside class="history-drawer" id="historyDrawer">
+  <div class="drawer-head">
+    <span><i data-lucide="history"></i> Analysis History</span>
+    <button class="icon-btn small drawer-close"><i data-lucide="x"></i></button>
+  </div>
+  <div class="drawer-body" id="historyList">
+    <p class="drawer-empty">No studies analyzed yet this session.</p>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-secondary" id="clearHistoryBtn"><i data-lucide="trash-2"></i> Clear History</button>
+  </div>
+</aside>
+
+<!-- Metadata Drawer -->
+<aside class="history-drawer" id="metaDrawer">
+  <div class="drawer-head">
+    <span><i data-lucide="file-text"></i> Study Metadata</span>
+    <button class="icon-btn small drawer-close"><i data-lucide="x"></i></button>
+  </div>
+  <div class="drawer-body" id="metaList"></div>
+</aside>
+
+<!-- Shortcuts Drawer -->
+<aside class="history-drawer" id="shortcutsDrawer">
+  <div class="drawer-head">
+    <span><i data-lucide="keyboard"></i> Keyboard Shortcuts</span>
+    <button class="icon-btn small drawer-close"><i data-lucide="x"></i></button>
+  </div>
+  <div class="drawer-body">
+    <div class="shortcut-row"><kbd>A</kbd><span>Run inference</span></div>
+    <div class="shortcut-row"><kbd>1</kbd>–<kbd>4</kbd><span>Load sample study</span></div>
+    <div class="shortcut-row"><kbd>M</kbd><span>Toggle measure tool</span></div>
+    <div class="shortcut-row"><kbd>N</kbd><span>Toggle annotate tool</span></div>
+    <div class="shortcut-row"><kbd>C</kbd><span>Toggle compare mode</span></div>
+    <div class="shortcut-row"><kbd>H</kbd><span>Toggle attention overlay</span></div>
+    <div class="shortcut-row"><kbd>+</kbd> / <kbd>−</kbd><span>Zoom in / out</span></div>
+    <div class="shortcut-row"><kbd>0</kbd><span>Reset zoom</span></div>
+    <div class="shortcut-row"><kbd>E</kbd><span>Export report</span></div>
+    <div class="shortcut-row"><kbd>Esc</kbd><span>Close panel / cancel tool</span></div>
+    <div class="shortcut-row"><kbd>?</kbd><span>Show this panel</span></div>
+  </div>
+</aside>
+
+<div class="drawer-scrim" id="drawerScrim" hidden></div>
+
+<footer>
+  <strong>Medical Disclaimer —</strong> MedX-AI is a synthetic, self-contained demonstration of Grad-CAM explainability. Imagery and predictions are procedurally generated, not derived from a trained model or real patient data, and must never inform clinical decisions.
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
